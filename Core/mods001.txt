@@ -1,0 +1,298 @@
+firmware mods:
+==============
+2026/02/11
+1. clock prescaler in ADC1 in pinout & configuration in lumira_hv.ioc was changed to Asynchronous clock mode divided by 2
+2. clicked "generate peripheral initialization as a pair of .c .h files per peripheral" in the .ioc project manager tab, code generator group.
+3. turns out its a big hastle to sample just one channel after setting up a dma sequence. so give up on that.
+    on the up side you can choose ad hock channels to sample using the "fully configurable" adc sequence settings.
+    also the sample time is also settable per channel, so that enables us to sample the first 5 channels fast
+    and then the next 2 channels slow, as requried. so we will sample 7 channels and include the temperature
+    and vrefint channels.
+4. made the sequence vrefint,temperature,ch0,ch1,ch2,ch3,ch4 in DMA
+5. changed System service call via SWI instruction interrupt from priority 0 to priority 3. called SVC interrupt.
+6. pendable request for system service interrupt priority changed from 0 to 3.
+7. the ADC1 interrupt disabled.
+8. the USART1 interrupt priority changed from 0 to 2.
+9. DMA half transfer interrupt disabled in code (not in the IDE GUI).
+10. the IDE misgenerates interrupt priority setting for the above mentioned SVC interrupt. It puts in SVC_IRQn but it should have put
+        in SVCall_IRQn. edit in main.c.
+11. disable half transfer DMA interrupt, HTIE bit in DMA_CCR1 register, LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_1), in main.c.
+	changed to LL_DMA_DisableIT_HT(DMA1, LL_DMA_CHANNEL_1);
+12. half transfer DMA interrupt handling has been commented out of DMA ISR.
+13. ADC interrupt enable has been deleted from ADC setup routine by the .ioc code generator.
+14. DMA Half Callback disabled in main.c and main.h.
+15. changed ADC_MAX_COUNTS to 4095 from 4095.0.
+16. changed NEUTRAL_ADC_COUNTS to 2048 from 2048.0.
+17. Vrefint ADC input enabled in .ioc file ADC1 configuration.
+18. deleted these lines from adc.c:
+	#define ADC_CHANNEL_CONF_RDY_TIMEOUT_MS (1U)
+	everthing to do with #if (USE_TIMEOUT == 1)
+19. ADC_Calibration_Start() moved up before MX_TIM3_Init() so that it happens before ADC conversions start
+20. added return void to ADC_Calibration_Start() and MX_TIM3_Init() functions.
+21. added return void to TIM_Base_Start(), ADC_DMA_Start(), ADC_Calibration_Start()
+22. 4799 replaced with SAMPLE_TIMER_ARR in tim.c
+23. #define PRINT_PERIOD_ST created in main.c
+24. AdcStatus, PrintCounter, ADCTemperatureReading, ADCVrefintReading, ADCCurrent, ADCVoltage, ADCLoadVoltage, ADCSenseVoltage
+      variables created in main.c.
+25. BAUD_RATE_U crated in main.c set to 115200 and value in usart.c replaced.
+26. VoltageRawValue[] array that used to hold 8 historic sets of data. now holds only one and so its size is defined by ADC_NUM_CH and not ADC_DATA_BUFFER_SIZE.
+27. ADC_DATA_BUFFER_SIZE variable definition commented out.
+28. ADC_FRAMES definition commented out.
+29. ui_startIndex not added to index of voltageRawValue array when taking new inputs, since half transfer disabled.
+30. ui_startIndex definition at top of main() commented out, since half transfer disabled.
+31. ui_startIndex evaluation commented out, since half tranfer disabled.
+32. SYSCLK_HZ, SAMPLE_PERIOD_US, SAMPLE_TIMER_ARR, BAUD_RATE_U definitions moved from main.c to main.h so they can be used in tim.c and usart.c
+33. adcDmaTranferStatus = 0 used to indicate half transfer, but that has been disabled.
+34. MSG_BUFFER_SIZE increased from 64 to 100.
+working
+16/02/2026
+35. turned on PA8 as an output and PA5 as an input in the .ioc. this is a temporary measure to get things going.
+36. opto output pin is set by default, reset at start of DMA ISR and reset at end of DMA ISR.
+	flash went up from 15320 to 15444.
+37. add these lines to main.h (note calculation taken out of SAMPLE_TIMER_ARR value):
+        #define SAMPLE_TIMER_ARR 3999 // sample interval 83.333us. there are 120 of these in one 50Hz half cycle and 100 in 60Hz.
+        #define BAUD_RATE_U 115200UL // user defined baud rate bits per second, each byte takes 87us.
+38. #define ADC_SEQ_LEN (5U) changed to (7U) and commented out.
+39. #define N_RMS (128U) commented out.
+40. common divisor table of 480000 and 400000 added to main.c.
+41. the following #defines added: FIFTY_SIXTY_HZ_THRESHOLD_ST, FIFTY_HZ_COUNTS_ST, SIXTY_HZ_COUNTS_ST
+42. ADC_Status variable removed. since it was monitoring reading temperature of Vrefint and these are now part of DMA.
+43. LL_mDelay(200) that slows down printer in main() commented out since not needed now. we are trying to output data at a rate that the uart can keep up.
+44. the following variables declared in main.h:
+	__IO uint8_t ucv_switchState;
+	__IO uint8_t ucv_switchStateRequest;
+45. the following variables declared in main.h:
+	__IO uint16_t usvp_ADCTemperatureReading;
+	__IO uint16_t usvp_ADCVrefintReading;
+	__IO int16_t svp_ADCCurrent;
+	__IO int16_t svp_ADCVoltage;
+	__IO int16_t svp_ADCLoadVoltage;
+	__IO int16_t svp_ADCSenseVoltage;
+save 19/02/2026
+46. printing changed to print a stream of all samples for 1 channel.
+save 20/02/2026
+47. sample rate changed from 83us to 33us.
+48. sample rate timer SAMPLE_TIMER_ARR changed from 3999 to 1599 to give 33.3us sample time
+49. END_PRINT_CYCLES_ST changed from 8000 to 3000.
+50. END_BUFFER_CYCLES_ST changed from 256 to 700.
+save 20/02/2026 and reverted back to 83us sample rate one
+51. started introducing filtering
+52. promoted local variables in AdcDmaTransferComplete_Callback(void) to 32 bit so we dont have to keep converting them back and forth
+reverted back to first save of 20/02/2026 - trying to implement a correlation based algorithm
+47. look up table implemented of sin and cos. N50, N60 created.
+48. ADCCurrent, i_ADCVoltage, i_ADCLoadVoltage, i_ADCSenseVoltage, i_ADCTemperatureReading, i_ADCVrefintReading
+    changed to 32 bit ints from 16 bit ones
+49. iv_CurrentZero, iv_AZero, iv_SAZero; changed to static in the ISR from volatile globals and not initialized in main any more\
+reverted back to first save of 20/02/2026 since couldn't figure out how to turn off each cycle
+47. copies zero filters out of previous version into current version. so now we have restored version with the good verified zero
+         filters out of the new version.
+48. i_ADCCurrentFilt, i_ADCVoltagefilt, i_ADCLoadVoltageFilt, i_ADCSenseVoltageFilt created
+49. filters added for current, voltage, switched active and sense
+50. the state machine uses the filtered version of Active rather than the unfiltered one now.
+60. added ucv_WasLow to input processing to ensure low for at least 2 cycles before input acknowledged
+61. uc_Stage and uc_AState changed to ucv_Stage and ucv_AState since they are actually volatile
+62. ucv_DeadTime added as state variable. initially it is set to 1/4 of the period but during normal operation
+         it forces a maximum adjustment to the mains frequency period in increments of sample interval on the low side
+63. Nominal_Half_Period_ST and Half_Period_Counter_ST defined as static inside ISR rather than as volatile global.
+20260226 Saved Again - we actually don't need to find the intersection of load voltage and Active voltage to turn on.
+    we can rely on load voltage being zero since electronic controllers have their capacitors behind their bridges.
+    This being the case. I am going back to the correlation based method. The one that was saved here is not finished.
+    Filters are finished and working but state machine is half finished and the on/off routine that I specified is
+    written only in P code.
+53. did not removed Dead time counters. i was trying to stay off long enough to guarantee load had discharged. but don't need that.
+         or at least we are not worrying about that, since lights are careful not to apply to much capacitive load to a
+         circuit. lights either use active PF correction in which case the load is inductive or resistive, or they
+         use passive PF correction, which involves presenting a deliberately small capacitance to the mains leads
+         but in any case you don't see that until mains voltage exceeds stored voltage since the capacitor is usually
+         behind a bridge rectifier. if there is a true capacitive load - such as perhaps a PF correction bank of capacitors
+         on an old iron core transformer fluorescent ballast, they we may be in trouble. But such ballasts are not
+         dimmable, so we would only be on 100% duty anyway. Also such lights are purely capacitive until the light
+         strikes at which time they start looking resistive. We could implement a system where if the light looks
+         capacitive and then becomes resistive, disable dimming because the light is an old fluoro. at turn off of
+         and old fluoro, the fluoro may present some voltage back into the mains until its PF correction capacitors
+         are discharged. So we would like to disable immediate turn on again for a number of cycles when an old
+         fluoro is detected to allow the PF capacitor to completely discharge. to tell the difference between a true
+         capacitor load and a CFL or LED electronic light, you could filter current to the point where noise is eliminated
+         but at least the 3rd harmonic is still present. then measure the peak, compensate for filtering,
+         estimate what the rms should have been had the waveform been purely sinusoidal and if RMS is smaller
+         than that, then you know you are dealing with a CFL or LED. Additionally, a CFL or LED does not shift
+         the mains current leading too much because it is only on close to the middle of the 50Hz cycle. a true
+         capacitive load does shift it. A typical 36W batten requires a 1.3H iron core transformer. This requires
+         about 5.6uF to obtain unity PF. In the worst case, the fluorescent lamp does not strike at all and the
+         PF correction capacitor is the only component in circuit. In this case that capacitor may be left with 340V stored on it.
+         Typically 80V to 120V max can be left on the PF correction capacitor at turn off after around 5ms.
+54. new procedure written in P code called "OutputProcessing" copied from previous abandoned version but modified.
+20260226 Saved the correlation filter version again. hit another problem trying to work out when to turn off for inductive loads
+    returned to latest non correlated one of 20260226. I'm going to take a different approach to the first test pulse.
+    We are going to turn on at the voltage zero crossing and watch how current behaves. if current goes above 15x(2sin(x))A we are going
+    to assume there is some input capacitance and use trailing edge switching.
+64. now concentrating on getting leading edge or trailing edge switching working but without worrying about
+         leading or trailing edge selection.
+65. fixed up OutputProcessing().
+66. s_Nominal_Half_Period_ST and s_Half_Period_Counter_ST moved out of AdcDmaTransferComplete_Callback() to the root of main.c file. not volatile since only used in ISR. now used in OutputProcessing().
+67. i_ADCCurrentFilt moved to root of main.c from inside AdcDmaTransferComplete_Callback() so it can be used in OutputProcessing().
+68. RightShiftFilter() function written and all filters replaced with a call to it.
+69. i_FilterMultiplierToUse and int32_t i_FilterShiftsToUse created.
+70. s_OPTemp was defined as uint16_t. changed to int16_t.
+71. uint8_t SwitchCycleStateRequest created in OutputProcessing
+
+
+
+
+
+
+
+
+
+Things to redo if new LL code is generated:
+===========================================
+1. the IDE misgenerates interrupt priority setting for the above mentioned SVC interrupt. It puts in SVC_IRQn but it should have put in SVCall_IRQn. edit in main.c.
+2. check that half transfer DMA interrupt remains disabled, HTIE, in the DMA_CCR1 register, LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_1), in main.c.
+	changed to LL_DMA_DisableIT_HT(DMA1, LL_DMA_CHANNEL_1);
+3. deleted these lines from adc.c:
+	#define ADC_CHANNEL_CONF_RDY_TIMEOUT_MS (1U)
+	everthing to do with #if (USE_TIMEOUT == 1)
+4. 4799 replaced with SAMPLE_TIMER_ARR in tim.c
+5. BAUD_RATE_U crated in main.c set to 115200 and value in usart.c replaced.
+6. add these lines to main.h (note calculation taken out of SAMPLE_TIMER_ARR value):
+        #define SAMPLE_TIMER_ARR 3999 // sample interval 83.333us. there are 120 of these in one 50Hz half cycle and 100 in 60Hz.
+        #define BAUD_RATE_U 115200UL // user defined baud rate bits per second, each byte takes 87us.
+7. the following variables declared in main.h:
+	__IO uint8_t ucv_switchState;
+	__IO uint8_t ucv_switchStateRequest;
+8. the following variables declared in main.h:
+	__IO uint16_t usvp_ADCTemperatureReading;
+	__IO uint16_t usvp_ADCVrefintReading;
+	__IO int16_t svp_ADCCurrent;
+	__IO int16_t svp_ADCVoltage;
+	__IO int16_t svp_ADCLoadVoltage;
+	__IO int16_t svp_ADCSenseVoltage;
+
+
+
+
+
+
+notes
+=====
+1. use "DMA transfers complete" interrupt at end of conversion of ADC4.
+2. interrupts enables and priorities are in NVIC under System Core under Categories under Pinout & Congfiguration under lumira_hv.ioc
+3. ISR names are first weakly defined in stm32c0xx_it.h
+4. ISRs are in stm32c0xx_it.c
+5. DMA ISR is enabled at the NVIC level in dma.c with NVIC_EnableIRQ(DMA1_Channel1_IRQn)
+6. The type of DMA interrupt is enabled in main.c with LL_DMA_EnableIT_TC(DMA1, LL_DMA_CHANNEL_1) and LL_DMA_EnableIT_TE(DMA1, LL_DMA_CHANNEL_1) for
+	transfer complete and transfer error. LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_1) is half transfer and is disabled.
+
+
+.ioc setup
+----------
+ADC setup:
+1. scan mode enabled
+2. continuous mode disabled // generates multiple sequences of conversions or just one
+3. DMA continuous requests disabled // after the first sequence is transferred, keep or dont keep transferring conversions
+4. number of conversions 5
+
+dma setup:
+1. mode circular // so that the DMA resets ready for next 5 transfers upon a timer trigger
+2. transfer complete interrupt enable
+
+timer 3:
+counter mode up
+prescaler = xxxx
+auto reload (ARR) = yyyy (defines trigger period)
+
+Trigger 0 setup:
+Master Mode Selection (TRGO) = Update Event
+
+make ADC wait for timer 3:
+External Trigger Source = TIM3 TRGO
+Trigger Edge = Rising
+
+LL
+==
+ADC, setup:
+LL_ADC_REG_SetSequencerLength(ADC1, LL_ADC_REG_SEQ_SCAN_ENABLE_5RANKS);
+
+ADC, set rank:
+LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_1, LL_ADC_CHANNEL_0);
+LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_2, LL_ADC_CHANNEL_1);
+LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_3, LL_ADC_CHANNEL_2);
+LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_4, LL_ADC_CHANNEL_3);
+LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_5, LL_ADC_CHANNEL_4);
+
+ADC, disable continuous mode:
+LL_ADC_REG_SetContinuousMode(ADC1, LL_ADC_REG_CONV_SINGLE);
+
+ADC, enable DMA request:
+LL_ADC_REG_SetDMATransfer(ADC1, LL_ADC_REG_DMA_TRANSFER_LIMITED);
+
+DMA, enable interrupt:
+LL_DMA_EnableIT_TC(DMAx, Streamy);
+NVIC_EnableIRQ(DMAx_Streamy_IRQn);
+
+Start conversion:
+LL_DMA_EnableStream(DMAx, Streamy);
+LL_ADC_REG_StartConversion(ADC1);
+
+ISR at end of conversion:
+void DMAx_Streamy_IRQHandler(void)
+{
+    if (LL_DMA_IsActiveFlag_TC(DMAx, Streamy))
+    {
+        LL_DMA_ClearFlag_TC(DMAx, Streamy);
+
+        // All 5 ADC values are now in buffer[]
+        // Sequence finished
+    }
+}
+
+Start of conversion off timer 3 does not need an ISR, we can set up a trigger.
+to start the system:
+LL_DMA_EnableStream(DMAx, Streamy);
+LL_ADC_Enable(ADC1);
+LL_TIM_EnableCounter(TIM3);
+
+abbreviations
+=============
+NVIC: nested vectored interrupt controller
+
+what I did
+==========
+1. set up sampling 5 adc channels with DMA transfer and an ISR at the end of the DMA transfer using LL
+
+to do
+=====
+1. check out the following interrupts:
+a. system service call via SWI instruction
+b. pendable request for system service
+c. time base: system tick timer
+d. DAM1 channel 1 interrupt
+e. adc1 interrupt
+f. TIM3 global interrupt
+g. USART1 interrupt
+2. setup read temperature ADC in DMA ISR
+3. check adc calibration
+4. disable calibration EOCALIE and adc ready ADRDYIE interrupts and enable only end of conversion interrupt EOCIE
+5. add ADC calibration to the end of the ISR sequence - after reading temperature. takes 82 ADC clock ticks or 3.42us. all conversions may
+	take 3.5us. sample time for temperature reading 6.7us. total is 14us.
+6. check what is started in ADC_DMA_Start() to make sure that ADC conversions are started in this routine and no where else.
+7. add Vdd calibraton
+8. set up dma for tx and rx on uarts
+9. filter the turn off time in leading edge by only permitting the turn off time to shift by one sample interval each half cycle
+
+defines
+=======
+LL_TIM_CLOCKDIVISION_DIV1 is in the following files:
+	c:\Users\Andre.Alves\STM32Cube\Repository\STM32Cube_FW_C0_V1.4.0\Drivers\STM32C0xx_HAL_Driver\Inc\stm32c0xx_ll_tim.h
+	c:\Work\STWork\.metadata\.plugins\org.eclipse.cdt.core\lumira_hv.1770782556132.pdom
+	c:\Work\STWork\lumira_hv\Core\Src\tim.c
+	c:\Work\STWork\lumira_hv\Drivers\STM32C0xx_HAL_Driver\Src\stm32c0xx_ll_tim.c
+	c:\Work\STWork\lumira_hv\Drivers\STM32C0xx_HAL_Driver\Inc\stm32c0xx_ll_tim.h
+
+
+
+
+
+
+
+

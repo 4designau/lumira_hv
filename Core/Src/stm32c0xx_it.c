@@ -140,52 +140,45 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32c0xx.s).                    */
 /******************************************************************************/
 
-/**
-  * @brief This function handles DMA1 channel 1 interrupt.
-  */
+/*** @brief This function handles DMA1 channel 1 interrupt. */
+/* with only little math processing, this ISR takes 5us to 8us to run */
+/* chatGTP says interrupt latency should be 0.4us to 0.7us that needs to be added to this */
 void DMA1_Channel1_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
+  LL_GPIO_ResetOutputPin(Opto_Output_GPIO_Port, Opto_Output_Pin);
+
   /* Check whether DMA Transfer error caused the DMA Interruption */
-  if (LL_DMA_IsActiveFlag_TE1(DMA1) == 1)
+  if (LL_DMA_IsActiveFlag_TE1(DMA1) == 1) // transfer error
   {
     /* Clear flag DMA Transfer error */
     LL_DMA_ClearFlag_TE1(DMA1);
     /* Call Interruption Treatment Function */
     AdcDmaTransferError_Callback();
   }
-  else if (LL_DMA_IsActiveFlag_TC1(DMA1) == 1)
+  else if (LL_DMA_IsActiveFlag_TC1(DMA1) == 1) // tranfer complete
   {
     /* Check flag DMA Transfer Complete */
     LL_DMA_ClearFlag_TC1(DMA1);
     /* Call Interruption treatment function */
     AdcDmaTransferComplete_Callback();
   }
-  /* Check whether DMA half transfer caused the DMA Interruption */
-  else if (LL_DMA_IsActiveFlag_HT1(DMA1) == 1)
+  else
   {
-    /* Clear Flag DMA Half Transfer */
-    LL_DMA_ClearFlag_HT1(DMA1);
-    /* Call Interruption Treatment Function */
-    AdcDmaTransferHalf_Callback();
   }
+  /* Check whether DMA half transfer caused the DMA Interruption */
+  //else if (LL_DMA_IsActiveFlag_HT1(DMA1) == 1) // half transfer, this interrupt is disabled
+  //{
+  //  /* Clear Flag DMA Half Transfer */
+  //  LL_DMA_ClearFlag_HT1(DMA1);
+  //  /* Call Interruption Treatment Function */
+  //  AdcDmaTransferHalf_Callback();
+  //}
   /* USER CODE END DMA1_Channel1_IRQn 0 */
   /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
 
   /* USER CODE END DMA1_Channel1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles ADC1 interrupt.
-  */
-void ADC1_IRQHandler(void)
-{
-  /* USER CODE BEGIN ADC1_IRQn 0 */
-
-  /* USER CODE END ADC1_IRQn 0 */
-  /* USER CODE BEGIN ADC1_IRQn 1 */
-
-  /* USER CODE END ADC1_IRQn 1 */
+  LL_GPIO_SetOutputPin(Opto_Output_GPIO_Port, Opto_Output_Pin);
 }
 
 /**

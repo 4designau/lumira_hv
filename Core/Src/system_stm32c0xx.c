@@ -46,7 +46,7 @@
 #include "stm32c0xx.h"
 
 #if !defined  (HSE_VALUE)
-#define HSE_VALUE    (48000000UL)    /*!< Value of the External oscillator in Hz */
+  #define HSE_VALUE    (48000000UL)    /*!< Value of the External oscillator in Hz */
 #endif /* HSE_VALUE */
 
 #if !defined  (HSI_VALUE)
@@ -54,7 +54,7 @@
 #endif /* HSI_VALUE */
 
 #if !defined  (LSI_VALUE)
- #define LSI_VALUE   (32000UL)     /*!< Value of LSI in Hz*/
+  #define LSI_VALUE   (32000UL)     /*!< Value of LSI in Hz*/
 #endif /* LSI_VALUE */
 
 #if !defined  (LSE_VALUE)
@@ -62,9 +62,9 @@
 #endif /* LSE_VALUE */
 
 #if defined(RCC_HSI48_SUPPORT)
-#if !defined  (HSI48_VALUE)
-#define HSI48_VALUE  48000000U  /*!< Value of the HSI48 oscillator in Hz */
-#endif /* HSI48_VALUE */
+  #if !defined  (HSI48_VALUE)
+    #define HSI48_VALUE  48000000U  /*!< Value of the HSI48 oscillator in Hz */
+  #endif /* HSI48_VALUE */
 #endif /* RCC_HSI48_SUPPORT */
 
 /**
@@ -143,11 +143,11 @@ void SystemInit(void)
 {
   
   /* Configure the Vector Table location add offset address ------------------*/
-#ifdef VECT_TAB_SRAM
-  SCB->VTOR = SRAM_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM */
-#else
-  SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH */
-#endif
+  #ifdef VECT_TAB_SRAM
+    SCB->VTOR = SRAM_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM */
+  #else
+    SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH */
+  #endif
 }
 
 /**
@@ -192,11 +192,11 @@ void SystemCoreClockUpdate(void)
   uint32_t tmp;
   uint32_t hsidiv;
   uint32_t sysdiv;
-#if defined(RCC_CR_SYSDIV)
-  sysdiv = (uint32_t)(((RCC->CR & RCC_CR_SYSDIV) >> RCC_CR_SYSDIV_Pos) + 1U);
-#else
-  sysdiv = 1U;
-#endif /* RCC_CR_SYSDIV */
+  #if defined(RCC_CR_SYSDIV)
+    sysdiv = (uint32_t)(((RCC->CR & RCC_CR_SYSDIV) >> RCC_CR_SYSDIV_Pos) + 1U);
+  #else
+    sysdiv = 1U;
+  #endif /* RCC_CR_SYSDIV */
 
   /* Get SYSCLK source -------------------------------------------------------*/
   switch (RCC->CFGR & RCC_CFGR_SWS)
@@ -205,11 +205,11 @@ void SystemCoreClockUpdate(void)
       SystemCoreClock = (HSE_VALUE / sysdiv);
       break;
 
-#if defined(RCC_HSI48_SUPPORT)
-    case RCC_CFGR_SW_1:                 /* HSI48 used as system clock */
-      SystemCoreClock = (HSI48_VALUE / sysdiv);
-      break;
-#endif /* RCC_HSI48_SUPPORT */
+    #if defined(RCC_HSI48_SUPPORT)
+      case RCC_CFGR_SW_1:                 /* HSI48 used as system clock */
+        SystemCoreClock = (HSI48_VALUE / sysdiv);
+        break;
+    #endif /* RCC_HSI48_SUPPORT */
 
     case (RCC_CFGR_SWS_1 | RCC_CFGR_SWS_0):  /* LSI used as system clock */
       SystemCoreClock = (LSI_VALUE / sysdiv);
@@ -220,6 +220,7 @@ void SystemCoreClockUpdate(void)
       break;
 
     case 0x00000000U:                   /* HSI used as system clock */
+
     default:                            /* HSI used as system clock */
       hsidiv = (1UL << ((READ_BIT(RCC->CR, RCC_CR_HSIDIV))>> RCC_CR_HSIDIV_Pos));
       SystemCoreClock = ((HSI_VALUE / sysdiv) / hsidiv);

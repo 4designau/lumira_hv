@@ -27,6 +27,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
+
 #include "stm32c0xx_ll_adc.h"
 #include "stm32c0xx_ll_dma.h"
 #include "stm32c0xx_ll_rcc.h"
@@ -46,7 +47,10 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#define SAMPLE_TIMER_ARR 3999 // sample interval 83.333us. there are 120 of these in one 50Hz half cycle and 100 in 60Hz.
+                              // 240V 50Hz mains is changing at 75398V/s at the zero crossing.
+                              // in 83.333us, the mains will have changed 6.3V near the zero crossing.
+#define BAUD_RATE_U 115200UL // user defined baud rate bits per second, each byte takes 87us.
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -68,14 +72,18 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void AdcDmaTransferComplete_Callback();
-void AdcDmaTransferHalf_Callback();
-void AdcDmaTransferError_Callback();
+void AdcDmaTransferComplete_Callback(void);
+// void AdcDmaTransferHalf_Callback();
+void AdcDmaTransferError_Callback(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define Opto_Input_Pin LL_GPIO_PIN_5
+#define Opto_Input_GPIO_Port GPIOA
 #define Light_Output_Pin LL_GPIO_PIN_7
 #define Light_Output_GPIO_Port GPIOA
+#define Opto_Output_Pin LL_GPIO_PIN_8
+#define Opto_Output_GPIO_Port GPIOA
 #ifndef NVIC_PRIORITYGROUP_0
 #define NVIC_PRIORITYGROUP_0         ((uint32_t)0x00000007) /*!< 0 bit  for pre-emption priority,
                                                                  4 bits for subpriority */
